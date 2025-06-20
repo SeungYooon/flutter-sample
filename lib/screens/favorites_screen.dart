@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../model/pokemon_detail.dart';
-import '../services/api_service.dart';
+import '../providers.dart'; // apiServiceProvider 위치
 import 'detail_screen.dart';
 
-class FavoritesScreen extends StatefulWidget {
+class FavoritesScreen extends ConsumerWidget {
   const FavoritesScreen({super.key});
 
   @override
-  State<FavoritesScreen> createState() => _FavoritesScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favoritesBox = Hive.box('favoritesBox');
+    final apiService = ref.watch(apiServiceProvider);
 
-class _FavoritesScreenState extends State<FavoritesScreen> {
-  final favoritesBox = Hive.box('favoritesBox');
-
-  @override
-  Widget build(BuildContext context) {
     final favoriteNames = favoritesBox.keys
         .where((key) => favoritesBox.get(key) == true)
         .map((key) => key.toString())
@@ -30,7 +27,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               itemBuilder: (context, index) {
                 final name = favoriteNames[index];
                 return FutureBuilder<PokemonDetail>(
-                  future: ApiService.fetchPokemonDetail(name),
+                  future: apiService.fetchPokemonDetail(name),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const ListTile(

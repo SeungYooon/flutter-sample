@@ -1,60 +1,63 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import '../model/pokemon_item.dart';
-import '../services/api_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'detail_screen.dart';
+import '../providers.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  late Future<List<PokemonItem>> _futurePokemon;
-  final favoritesBox = Hive.box('favoritesBox');
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _futurePokemon = ApiService.fetchPokemonList();
-  }
 
-  void toggleFavorite(String name) {
-    setState(() {
-      final current = favoritesBox.get(name, defaultValue: false);
-      favoritesBox.put(name, !current);
+    _scrollController.addListener(() {
+      final notifier = ref.read(pokemonListProvider.notifier);
+      final state = ref.read(pokemonListProvider);
+
+      if (_scrollController.position.pixels >=
+              _scrollController.position.maxScrollExtent - 200 &&
+          !notifier.isLoading &&
+          notifier.hasMore) {
+        notifier.fetchPokemon();
+      }
     });
-  }
-
-  bool isFavorite(String name) {
-    return favoritesBox.get(name, defaultValue: false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final pokemonListAsync = ref.watch(pokemonListProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('포켓몬 리스트')),
-      body: FutureBuilder<List<PokemonItem>>(
-        future: _futurePokemon,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('데이터 로드 실패: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('표시할 데이터가 없습니다.'));
-          }
-
-          final pokemonList = snapshot.data!;
+      body: pokemonListAsync.when(
+        data: (list) {
           return ListView.builder(
-            itemCount: pokemonList.length,
+            controller: _scrollController,
+            itemCount:
+                list.length +
+                (ref.read(pokemonListProvider.notifier).hasMore ? 1 : 0),
             itemBuilder: (context, index) {
-              final pokemon = pokemonList[index];
-              final id = index + 1; // 이미지 URL용 ID
+              if (index >= list.length) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final pokemon = list[index];
+              final id = index + 1;
               final imageUrl =
                   'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$id.png';
+
+              final isFavorite = ref
+                  .read(pokemonListProvider.notifier)
+                  .isFavorite(pokemon.name);
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -63,12 +66,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   title: Text(pokemon.name),
                   trailing: IconButton(
                     icon: Icon(
-                      isFavorite(pokemon.name) ? Icons.star : Icons.star_border,
-                      color: isFavorite(pokemon.name)
-                          ? Colors.amber
-                          : Colors.grey,
+                      isFavorite ? Icons.star : Icons.star_border,
+                      color: isFavorite ? Colors.amber : Colors.grey,
                     ),
-                    onPressed: () => toggleFavorite(pokemon.name),
+                    onPressed: () => ref
+                        .read(pokemonListProvider.notifier)
+                        .toggleFavorite(pokemon.name),
                   ),
                   onTap: () {
                     Navigator.push(
@@ -83,7 +86,15 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           );
         },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('에러 발생: $error')),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 }

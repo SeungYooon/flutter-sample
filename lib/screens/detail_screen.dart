@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../model/pokemon_detail.dart';
-import '../services/api_service.dart';
+import '../providers.dart'; // ApiService provider 선언 위치
 
-class DetailScreen extends StatefulWidget {
+class DetailScreen extends ConsumerStatefulWidget {
   final String pokemonName;
 
   const DetailScreen({super.key, required this.pokemonName});
 
   @override
-  State<DetailScreen> createState() => _DetailScreenState();
+  ConsumerState<DetailScreen> createState() => _DetailScreenState();
 }
 
-class _DetailScreenState extends State<DetailScreen> {
+class _DetailScreenState extends ConsumerState<DetailScreen> {
   late Future<PokemonDetail> _futureDetail;
 
   @override
   void initState() {
     super.initState();
-    _futureDetail = ApiService.fetchPokemonDetail(widget.pokemonName);
+    final apiService = ref.read(apiServiceProvider);
+    _futureDetail = apiService.fetchPokemonDetail(widget.pokemonName);
   }
 
   @override
